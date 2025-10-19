@@ -93,15 +93,14 @@
       roadXStart + roadWidth - 60 // Right lane
     ];
 
-    const imagePath = '新增資料夾/';
-    const imgPlayer = new Image(); imgPlayer.src = imagePath + "player.png";
-    const imgObstacle = new Image(); imgObstacle.src = imagePath + "obstacle.png";
-    const imgCoin = new Image(); imgCoin.src = imagePath + "coin.png";
-    const imgSpeed = new Image(); imgSpeed.src = imagePath + "thunder.png";
-    const imgShield = new Image(); imgShield.src = imagePath + "shield.png";
+    // Corrected image paths for GitHub Pages root directory
+    const imgPlayer = new Image(); imgPlayer.src = "player.png";
+    const imgObstacle = new Image(); imgObstacle.src = "obstacle.png";
+    const imgCoin = new Image(); imgCoin.src = "coin.png";
+    const imgSpeed = new Image(); imgSpeed.src = "thunder.png";
+    const imgShield = new Image(); imgShield.src = "shield.png";
 
-    const backgroundAssetsPath = '8888888/';
-    const imgTree = new Image(); imgTree.src = backgroundAssetsPath + 'tree.png';
+    const imgTree = new Image(); imgTree.src = "tree.png";
 
     let player = { x: lanes[1], y: canvasHeight - 80, width: 48, height: 48, speed: 5, shield: false };
     let obstacles = [];
