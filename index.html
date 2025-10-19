@@ -105,7 +105,7 @@
     function loadAllImages() {
       imageFiles.forEach(filename => {
         const img = new Image();
-        img.src = filename; // Assumes images are in the root directory
+        img.src = filename; // Corrected: simple filename for root directory
         img.onload = () => {
           imagesLoadedCount++;
           if (imagesLoadedCount === imageFiles.length) {
