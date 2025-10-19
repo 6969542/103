@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>Racing Game</title>
+  <style>
+    body {
+      margin: 0;
+      background: #222;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center; /* Added for vertical centering */
+      height: 100vh; /* Added for vertical centering */
+      font-family: sans-serif;
+      color: white;
+    }
+    h1 {
+      position: absolute;
+      top: 20px;
+      width: 100%;
+      text-align: center;
+      font-size: 36px;
+      margin: 0;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      background-color: #000;
+      transform: scale(1.25);
+    }
+    #startOverlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+    }
+    button {
+      font-size: 20px;
+      padding: 10px 30px;
+      margin: 10px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      background-color: #00aaff;
+      color: white;
+      transition: transform 0.2s;
+    }
+    button:hover {
+      transform: scale(1.1);
+      background-color: #0077cc;
+    }
+    .start-btn { background-color: orange; }
+  </style>
+</head>
+<body>
+  <h1>Racing Game</h1>
+  <div id="startOverlay">
+    <h2>選擇難度開始遊戲</h2>
+    <div>
+      <button onclick="selectDifficulty('easy')">簡單</button>
+      <button onclick="selectDifficulty('normal')">普通</button>
+      <button onclick="selectDifficulty('hard')">困難</button>
+    </div>
+    <div style="margin-top:20px;">
+      <button onclick="selectMode('endless')">無限模式</button>
+      <button onclick="selectMode('timed')">計時模式</button>
+    </div>
+    <div style="margin-top:20px;">
+      <button id="startBtn" class="start-btn" onclick="confirmStart()">開始遊戲</button>
+    </div>
+  </div>
+
+  <canvas id="gameCanvas" width="400" height="600"></canvas>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const canvasWidth = canvas.width;
+    const canvasHeight = canvas.height;
+    const roadWidth = 240; // Changed from 200
+    const roadXStart = (canvasWidth - roadWidth) / 2;
+    
+    // Define lane positions
+    const lanes = [
+      roadXStart + 20, // Left lane
+      roadXStart + roadWidth / 2 - 20, // Middle lane
+      roadXStart + roadWidth - 60 // Right lane
+    ];
+
+    const imagePath = '新增資料夾/';
+    const imgPlayer = new Image(); imgPlayer.src = imagePath + "player.png";
+    const imgObstacle = new Image(); imgObstacle.src = imagePath + "obstacle.png";
+    const imgCoin = new Image(); imgCoin.src = imagePath + "coin.png";
+    const imgSpeed = new Image(); imgSpeed.src = imagePath + "thunder.png";
+    const imgShield = new Image(); imgShield.src = imagePath + "shield.png";
+
+    const backgroundAssetsPath = '8888888/';
+    const imgTree = new Image(); imgTree.src = backgroundAssetsPath + 'tree.png';
+
+    let player = { x: lanes[1], y: canvasHeight - 80, width: 48, height: 48, speed: 5, shield: false };
+    let obstacles = [];
+    let powerUps = [];
+    let particles = []; // For particle effects
+    let score = 0;
+    let distance = 0;
+    let obstacleSpeed = 4;
+    let spawnRate = 1500;
+    let spawnInterval;
+    let selectedDifficulty = null;
+    let selectedMode = null;
+    let gameState = "menu"; // Game state variable
+    let shieldTimer = 0;
+    let timer = 60;
+    let timerFrame = 60;
+    let isGameOver = false; // Ensure isGameOver is defined
+
+    function selectDifficulty(level) {
+      selectedDifficulty = level;
+    }
+
+    function selectMode(mode) {
+      selectedMode = mode;
+    }
+
+    function confirmStart() {
+      if (!selectedDifficulty || !selectedMode) {
+        alert("請先選擇難度與模式！");
+        return;
+      }
+      startGame(selectedDifficulty, selectedMode);
+    }
+
+    function startGame(difficulty, mode) {
+      gameState = "playing"; // Set game state to playing
+      document.getElementById("startOverlay").style.display = "none"; // Hide overlay
+      setDifficulty(difficulty);
+      
+      // Reset game data
+      player.x = lanes[1]; // Reset player x to middle lane
+      player.shield = false;
+      player.speed = 5;
+      score = 0;
+      distance = 0;
+      obstacles = [];
+      powerUps = [];
+      particles = []; // Reset particles
+      shieldTimer = 0;
+      timer = 60;
+      timerFrame = 60;
+      isGameOver = false; // Reset isGameOver
+
+      clearInterval(spawnInterval);
+      spawnInterval = setInterval(() => {
+        obstacles.push(generateObstacle());
+        powerUps.push(generatePowerUp());
+      }, spawnRate);
+
+      updateGame(); // Start the game loop
+    }
+
+    function setDifficulty(level) {
+      switch (level) {
+        case "easy": obstacleSpeed = 2; spawnRate = 2000; break;
+        case "normal": obstacleSpeed = 4; spawnRate = 1500; break;
+        case "hard": obstacleSpeed = 6; spawnRate = 1000; break;
+      }
+    }
+
+    function isOverlapping(newItem, list) {
+      return list.some(item =>
+        Math.abs(item.x - newItem.x) < 40 &&
+        Math.abs(item.y - newItem.y) < 40
+      );
+    }
+
+    function generateObstacle() {
+      let obs;
+      do {
+        const laneIndex = Math.floor(Math.random() * lanes.length); // Use lanes array
+        const xPos = lanes[laneIndex];
+        obs = { x: xPos, y: 0, width: 40, height: 40 };
+      } while (isOverlapping(obs, powerUps)); // Re-introduced overlap check
+      return obs;
+    }
+
+    function generatePowerUp() {
+      let p;
+      do {
+        const laneIndex = Math.floor(Math.random() * lanes.length); // Use lanes array
+        const xPos = lanes[laneIndex];
+        p = { x: xPos, y: 0, width: 30, height: 30, type: ["score", "speed", "shield"][Math.floor(Math.random() * 3)] };
+      } while (isOverlapping(p, obstacles)); // Re-introduced overlap check
+      return p;
+    }
+
+    // Particle spawning function
+    function spawnParticles(x, y, color) {
+      for (let i = 0; i < 10; i++) {
+        particles.push({
+          x: x,
+          y: y,
+          dx: (Math.random() - 0.5) * 2,
+          dy: (Math.random() - 0.5) * 2,
+          life: 30,
+          color: color
+        });
+      }
+    }
+
+    function updateGame() {
+      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+      if (gameState === "playing") {
+        // --- Game Logic when playing ---
+
+        // Draw light green grass background
+        ctx.fillStyle = "#90EE90"; // Light green
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight); // Fill entire canvas with grass
+
+        // Draw gray road
+        ctx.fillStyle = "gray";
+        ctx.fillRect(roadXStart, 0, roadWidth, canvasHeight);
+
+        // Draw white outer border lines
+        ctx.fillStyle = "white";
+        const outerLineWidth = 5;
+        ctx.fillRect(roadXStart, 0, outerLineWidth, canvasHeight); // Left outer line
+        ctx.fillRect(roadXStart + roadWidth - outerLineWidth, 0, outerLineWidth, canvasHeight); // Right outer line
+
+        // Draw white dashed lane separator lines
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 5;
+        ctx.setLineDash([20, 20]); // Dashed line: 20px dash, 20px gap
+        const laneSeparatorOffset = (Date.now() / 10 * player.speed * 0.5) % 40; // Scrolling effect for dashes
+
+        // First separator (between lane 1 and 2)
+        ctx.beginPath();
+        ctx.moveTo(roadXStart + roadWidth / 3, 0 - laneSeparatorOffset);
+        ctx.lineTo(roadXStart + roadWidth / 3, canvasHeight);
+        ctx.stroke();
+
+        // Second separator (between lane 2 and 3)
+        ctx.beginPath();
+        ctx.moveTo(roadXStart + (roadWidth / 3) * 2, 0 - laneSeparatorOffset);
+        ctx.lineTo(roadXStart + (roadWidth / 3) * 2, canvasHeight);
+        ctx.stroke();
+
+        ctx.setLineDash([]); // Reset to solid lines for other drawings
+
+        // Draw trees
+        const treeWidth = 48; // Enlarged from 32
+        const treeHeight = 48; // Enlarged from 32
+        const treeSpacing = 80;
+        const treeScrollSpeed = player.speed * 0.5; // Trees scroll faster with player speed
+        const treeOffset = (Date.now() / 10 * treeScrollSpeed) % treeSpacing; // For scrolling effect
+
+        for (let y = -treeSpacing + treeOffset; y < canvasHeight; y += treeSpacing) {
+          // Left side
+          ctx.drawImage(imgTree, roadXStart - treeWidth - 10, y, treeWidth, treeHeight);
+          // Right side
+          ctx.drawImage(imgTree, roadXStart + roadWidth + 10, y, treeWidth, treeHeight);
+        }
+        
+        ctx.textAlign = "left";
+        ctx.fillStyle = "white";
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 3;
+        ctx.font = "20px Arial";
+
+        // Score
+        ctx.strokeText("分數：" + score, 20, 30);
+        ctx.fillText("分數：" + score, 20, 30);
+
+        if (selectedMode === "timed") {
+          timerFrame--;
+          if (timerFrame <= 0) {
+            timer--;
+            timerFrame = 60;
+          }
+          if (timer <= 0) {
+            isGameOver = true;
+          }
+          ctx.strokeText("時間：" + timer + "秒", 20, 60);
+          ctx.fillText("時間：" + timer + "秒", 20, 60);
+        }
+
+        distance += player.speed * 0.1;
+        ctx.strokeText("距離：" + Math.floor(distance) + "m", 20, 90);
+        ctx.fillText("距離：" + Math.floor(distance) + "m", 20, 90);
+
+        ctx.drawImage(imgPlayer, player.x, player.y, player.width, player.height);
+
+        if (player.speed > 5) {
+          ctx.fillStyle = "orange";
+          ctx.beginPath();
+          ctx.moveTo(player.x + player.width / 2, player.y + player.height);
+          ctx.lineTo(player.x + player.width / 2 - 5, player.y + player.height + 15);
+          ctx.lineTo(player.x + player.width / 2 + 5, player.y + player.height + 15);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        if (player.shield) {
+          shieldTimer--;
+          if (shieldTimer <= 0) {
+            player.shield = false;
+          } else {
+            ctx.strokeStyle = "cyan";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(player.x + player.width / 2, player.y + player.height / 2, player.width / 2 + 5, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+
+        obstacles.forEach((obs, i) => {
+          obs.y += obstacleSpeed;
+          ctx.drawImage(imgObstacle, obs.x, obs.y, obs.width, obs.height);
+          if (checkCollision(player, obs) && !player.shield) {
+            isGameOver = true;
+          }
+        });
+
+        powerUps.forEach((p, i) => {
+          p.y += obstacleSpeed;
+          let img = p.type === 'score' ? imgCoin : p.type === 'speed' ? imgSpeed : imgShield;
+          ctx.drawImage(img, p.x, p.y, p.width, p.height);
+
+          if (checkCollision(player, p)) {
+            applyPowerUp(p.type);
+            powerUps.splice(i, 1);
+          }
+        });
+
+        // New: Update and draw particles
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.x += p.dx;
+          p.y += p.dy;
+          p.life--;
+
+          if (p.life <= 0) {
+            particles.splice(i, 1);
+          } else {
+            ctx.globalAlpha = p.life / 30;
+            ctx.fillStyle = p.color;
+            ctx.fillRect(p.x, p.y, 2, 2);
+            ctx.globalAlpha = 1.0;
+          }
+        }
+
+        // Check for game over conditions
+        if (isGameOver) {
+          gameState = "gameover"; // Transition to gameover state
+          clearInterval(spawnInterval); // Stop spawning
+        }
+
+      } else if (gameState === "menu") {
+        // --- Display Start Overlay ---
+        document.getElementById("startOverlay").style.display = "flex";
+
+      } else if (gameState === "gameover") {
+        // --- Display Game Over Screen ---
+        ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+        ctx.fillStyle = "red";
+        ctx.font = "bold 48px PixelFont, Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("GAME OVER", canvasWidth / 2, canvasHeight / 2 - 40);
+
+        ctx.fillStyle = "white";
+        ctx.font = "24px Arial";
+        ctx.fillText("分數：" + score, canvasWidth / 2, canvasHeight / 2 + 10);
+        ctx.fillText("距離：" + Math.floor(distance) + "m", canvasWidth / 2, canvasHeight / 2 + 50);
+        ctx.fillText("點擊畫面以重新開始", canvasWidth / 2, canvasHeight / 2 + 90);
+      }
+
+      requestAnimationFrame(updateGame); // Keep the loop running
+    }
+
+    function checkCollision(a, b) {
+      return a.x < b.x + b.width &&
+             a.x + a.width > b.x &&
+             a.y < b.y + b.height &&
+             a.y + a.height > b.y;
+    }
+
+    function applyPowerUp(type) {
+      switch (type) {
+        case "score":
+          score += 100;
+          distance += 10; // 吃硬幣加距離
+          spawnParticles(player.x + player.width / 2, player.y + player.height / 2, "gold");
+          break;
+        case "speed":
+          player.speed += 4;
+          spawnParticles(player.x + player.width / 2, player.y + player.height, "orange");
+          break;
+        case "shield":
+          player.shield = true;
+          shieldTimer = 300;
+          spawnParticles(player.x + player.width / 2, player.y + player.height / 2, "blue");
+          break;
+      }
+    }
+
+    document.addEventListener("keydown", e => {
+      if (gameState !== "playing") return;
+      if (e.key === "ArrowLeft") {
+        const currentLane = lanes.indexOf(player.x);
+        if (currentLane > 0) player.x = lanes[currentLane - 1];
+      } else if (e.key === "ArrowRight") {
+        const currentLane = lanes.indexOf(player.x);
+        if (currentLane < lanes.length - 1) player.x = lanes[currentLane + 1];
+      }
+    });
+
+    canvas.addEventListener('click', () => {
+      if (gameState === "gameover") {
+        startGame(selectedDifficulty, selectedMode);
+      }
+    });
+
+    // Initial call to updateGame to display the menu
+    updateGame();
+
+  </script>
+</body>
+</html>
